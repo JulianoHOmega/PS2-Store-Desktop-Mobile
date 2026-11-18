@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
-import 'github_search.dart';
+import 'multi_source_search.dart';
 import 'download_history.dart';
 
 const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '');
@@ -46,7 +46,7 @@ class StoreHome extends StatefulWidget {
 
 class _StoreHomeState extends State<StoreHome> {
   List<StoreApp> apps = [];
-  String search = '', category = 'Todos', status = 'Carregando catalogo...', source = 'Local';
+  String search = 'OPL', category = 'Todos', status = 'Carregando catalogo...', source = 'Local';
   bool busy = false;
   bool searchingOnline = false;
   double progress = 0;
@@ -146,9 +146,9 @@ class _StoreHomeState extends State<StoreHome> {
 
   Future<void> searchOnline() async {
     if (busy || searchingOnline) return;
-    setState(() { searchingOnline = true; status = 'Consultando projetos publicos no GitHub...'; });
+    setState(() { searchingOnline = true; status = 'Pesquisando GitHub e GitLab...'; });
     try {
-      final results = await GitHubHomebrewSearch().search(search);
+      final results = await MultiSourceSearch().search(search);
       if (!mounted) return;
       setState(() {
         apps = results.map((r) => StoreApp(
@@ -157,9 +157,9 @@ class _StoreHomeState extends State<StoreHome> {
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
-        source = 'GitHub (Releases publicos)';
+        source = 'GitHub + GitLab (Releases publicos)';
         category = 'Todos';
-        status = '${results.length} resultados relevantes; compatibilidade e seguranca NAO verificadas';
+        status = '${results.length} arquivos encontrados; origem indicada; NAO verificados';
       });
     } catch (e) {
       if (mounted) setState(() => status = 'Busca online indisponivel: $e');
@@ -275,8 +275,8 @@ class _StoreHomeState extends State<StoreHome> {
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Biblioteca digital de homebrews', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5), Text('Fonte: $source  •  $status', maxLines: 3, overflow: TextOverflow.ellipsis),
+          const Text('Busca de arquivos ELF, ISO e compactados', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5), const Text('Aviso: arquivos e compatibilidade nao verificados.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)), Text('Fonte: $source  •  $status', maxLines: 3, overflow: TextOverflow.ellipsis),
           if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             LinearProgressIndicator(value: progress > 0 ? progress : null),
             const SizedBox(height: 4), Text(
@@ -286,11 +286,11 @@ class _StoreHomeState extends State<StoreHome> {
               '${totalDownloadBytes > 0 ? ' • ${(progress * 100).toStringAsFixed(0)}%' : ''}',
               style: const TextStyle(fontSize: 12)),
           ])),
-          const SizedBox(height: 18), TextField(onChanged: (v) => setState(() => search = v),
-            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar homebrews e utilitarios', border: OutlineInputBorder())),
+          const SizedBox(height: 18), TextFormField(initialValue: 'OPL', onChanged: (v) => search = v,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar OPL, ELF, ISO, ZIP, RAR...' , border: OutlineInputBorder())),
           const SizedBox(height: 10), Row(children: [
             FilledButton.icon(onPressed: busy || searchingOnline ? null : searchOnline,
-              icon: const Icon(Icons.public), label: const Text('Buscar no GitHub')),
+              icon: const Icon(Icons.public), label: const Text('Buscar na internet')),
             const SizedBox(width: 12),
             if (searchingOnline) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             const Spacer(),
@@ -303,7 +303,7 @@ class _StoreHomeState extends State<StoreHome> {
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
           ])),
-          const SizedBox(height: 12), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar no GitHub para encontrar projetos publicos.')) :
+          const SizedBox(height: 12), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar na internet para encontrar arquivos publicos.')) :
             LayoutBuilder(builder: (context, constraints) => GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 550 ? 2 : 1,
