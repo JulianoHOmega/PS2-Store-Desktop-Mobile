@@ -31,3 +31,15 @@ No GitHub, envie todos os arquivos para a raiz e crie .github/workflows/build.ym
 - Os workflows permanecem iguais aos da v0.3.1, exceto pelas dependencias do aplicativo.
 
 **Validacao pendente:** compilar as tres plataformas no GitHub Actions e testar o salvamento em Windows e Android.
+
+
+## v0.5 - Busca experimental no GitHub
+
+- Na interface, digite um termo e clique em **Buscar no GitHub**.
+- Busca repositorios publicos com termos `ps2 homebrew`, consulta ate oito Releases e mostra o primeiro arquivo `.elf`, `.zip` ou `.7z` de cada projeto.
+- A pesquisa **nao valida automaticamente** compatibilidade PS2, seguranca ou permissao de redistribuicao. Confira a origem/licenca.
+- A API publica do GitHub tem limites e a busca pode retornar zero resultados.
+- O botao de atualizar retorna ao catalogo demonstrativo local.
+- Downloads usam a implementacao da v0.4; no Android abre o seletor de destino.
+- O workflow `.github/workflows/build.yml` foi preservado integralmente.
+- Ainda nao compilado/testado em Flutter neste ambiente.

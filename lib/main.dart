@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'github_search.dart';
 
 const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '');
 
@@ -43,6 +44,7 @@ class _StoreHomeState extends State<StoreHome> {
   List<StoreApp> apps = [];
   String search = '', category = 'Todos', status = 'Carregando catalogo...', source = 'Local';
   bool busy = false;
+  bool searchingOnline = false;
   double progress = 0;
   String? lastSavedPath;
   @override
@@ -73,6 +75,29 @@ class _StoreHomeState extends State<StoreHome> {
     } catch (e) {
       if (!mounted) return;
       setState(() => status = 'Falha ao carregar catalogo: $e');
+    }
+  }
+
+  Future<void> searchOnline() async {
+    if (busy || searchingOnline) return;
+    setState(() { searchingOnline = true; status = 'Consultando projetos publicos no GitHub...'; });
+    try {
+      final results = await GitHubHomebrewSearch().search(search);
+      if (!mounted) return;
+      setState(() {
+        apps = results.map((r) => StoreApp(
+          id: r.id, title: r.title, description: r.description,
+          category: 'GitHub', version: r.version, license: r.license,
+          downloadUrl: r.downloadUrl, cover: '',
+        )).toList();
+        source = 'GitHub (Releases publicos)';
+        category = 'Todos';
+        status = '${results.length} arquivos encontrados; confira a origem e a licenca antes de baixar';
+      });
+    } catch (e) {
+      if (mounted) setState(() => status = 'Busca online indisponivel: $e');
+    } finally {
+      if (mounted) setState(() => searchingOnline = false);
     }
   }
 
@@ -160,7 +185,7 @@ class _StoreHomeState extends State<StoreHome> {
     final filtered = apps.where((a) => (category == 'Todos' || a.category == category) &&
       '${a.title} ${a.description}'.toLowerCase().contains(search.toLowerCase())).toList();
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-      actions: [IconButton(tooltip: 'Atualizar catalogo', onPressed: busy ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
+      actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Biblioteca digital de homebrews', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
@@ -171,6 +196,12 @@ class _StoreHomeState extends State<StoreHome> {
           ])),
           const SizedBox(height: 18), TextField(onChanged: (v) => setState(() => search = v),
             decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar homebrews e utilitarios', border: OutlineInputBorder())),
+          const SizedBox(height: 10), Row(children: [
+            FilledButton.icon(onPressed: busy || searchingOnline ? null : searchOnline,
+              icon: const Icon(Icons.public), label: const Text('Buscar no GitHub')),
+            const SizedBox(width: 12),
+            if (searchingOnline) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          ]),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
