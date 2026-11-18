@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'external_sites.dart';
 import 'multi_source_search.dart';
 import 'download_history.dart';
 import 'result_presentation.dart';
@@ -33,7 +35,7 @@ class Ps2StoreApp extends StatelessWidget {
   const Ps2StoreApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'PS2 Store', debugShowCheckedModeBanner: false,
+    title: 'PS2 STORE by JulianoHOmega', debugShowCheckedModeBanner: false,
     theme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
       colorSchemeSeed: const Color(0xff368ce7), scaffoldBackgroundColor: const Color(0xff091322)),
     home: const StoreHome());
@@ -162,7 +164,7 @@ class _StoreHomeState extends State<StoreHome> {
         )).toList();
         source = 'GitHub + GitLab + Internet Archive + SourceForge + Codeberg';
         category = 'Todos'; formatFilter = 'Todos'; sourceFilter = 'Todas';
-        status = '${results.length} arquivos encontrados; origem indicada; NAO verificados';
+        status = '${results.length} arquivos encontrados';
       });
     } catch (e) {
       if (mounted) setState(() => status = 'Busca online indisponivel: $e');
@@ -274,6 +276,9 @@ class _StoreHomeState extends State<StoreHome> {
         Text('Tamanho: ${fileSize(app.sizeBytes)}'),
         Text('Compatibilidade e seguranca: NAO VERIFICADAS',
           style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+        if (app.projectUrl.isNotEmpty) TextButton.icon(
+          onPressed: () => launchUrl(Uri.parse(app.projectUrl), mode: LaunchMode.externalApplication),
+          icon: const Icon(Icons.open_in_new), label: const Text('Abrir pagina original')),
         if (app.projectUrl.isNotEmpty) SelectableText('Projeto: ${app.projectUrl}'),
         const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Download indisponivel' : app.downloadUrl,
           style: const TextStyle(fontSize: 12, color: Colors.lightBlueAccent))]))),
@@ -290,7 +295,7 @@ class _StoreHomeState extends State<StoreHome> {
       (formatFilter == 'Todos' || ResultPresentation.format(a.downloadUrl, a.title) == formatFilter) &&
       (sourceFilter == 'Todas' || ResultPresentation.source(a.developer, a.projectUrl) == sourceFilter) &&
       '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains(search.toLowerCase())).toList();
-    return Scaffold(appBar: AppBar(title: const Text('PS2 STORE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
+    return Scaffold(appBar: AppBar(title: const Text('PS2 STORE by JulianoHOmega', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Container(decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/omega_background.jpeg'), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Color(0xB9000000), BlendMode.darken))), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -322,6 +327,10 @@ class _StoreHomeState extends State<StoreHome> {
             TextButton.icon(onPressed: showDownloadHistory, icon: const Icon(Icons.history),
               label: Text('Historico (${completedDownloads.length})')),
           ]),
+          const SizedBox(height: 10), OutlinedButton.icon(
+            onPressed: () => showExternalSites(context, search),
+            icon: const Icon(Icons.travel_explore),
+            label: const Text('Pesquisar em 15 sites adicionais')),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
@@ -330,7 +339,7 @@ class _StoreHomeState extends State<StoreHome> {
             DropdownButton<String>(value: formatFilter, hint: const Text('Formato'), items: formats.map((f) => DropdownMenuItem(value: f, child: Text('Formato: $f'))).toList(), onChanged: (v) => setState(() => formatFilter = v ?? 'Todos')),
             DropdownButton<String>(value: sourceFilter, hint: const Text('Origem'), items: sources.map((f) => DropdownMenuItem(value: f, child: Text('Origem: $f'))).toList(), onChanged: (v) => setState(() => sourceFilter = v ?? 'Todas')),
           ]),
-          const SizedBox(height: 8), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar na internet para encontrar arquivos publicos.')) :
+          const SizedBox(height: 8), Expanded(child: filtered.isEmpty ? Center(child: searchingOnline ? const CircularProgressIndicator() : const Text('Nenhum resultado listado. Use Buscar na internet para pesquisar.')) :
             LayoutBuilder(builder: (context, constraints) => GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 550 ? 2 : 1,
