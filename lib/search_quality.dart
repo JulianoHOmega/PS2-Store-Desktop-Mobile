@@ -27,7 +27,13 @@ class SearchQuality {
     if (n.contains('ps2') || n.contains('playstation2')) points += 4;
     if (s.contains('ps2sdk') || s.contains('ps2dev')) points += 3;
     if (s.contains('playstation 2') || s.contains('homebrew')) points += 2;
-    if (query.trim().isNotEmpty && n.contains(query.trim().toLowerCase())) points += 3;
+    final q = query.trim().toLowerCase();
+    if (q.isNotEmpty && n.contains(q)) points += 3;
+    if (q == 'opl') {
+      if (RegExp(r'(^|[^a-z])opl([^a-z]|$)').hasMatch(n)) points += 12;
+      if (s.contains('open ps2 loader')) points += 18;
+      if (s.contains('oplus') || s.contains('opl3')) points -= 20;
+    }
     return points;
   }
 }

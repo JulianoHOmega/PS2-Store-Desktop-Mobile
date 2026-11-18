@@ -146,7 +146,7 @@ class _StoreHomeState extends State<StoreHome> {
 
   Future<void> searchOnline() async {
     if (busy || searchingOnline) return;
-    setState(() { searchingOnline = true; status = 'Pesquisando GitHub e GitLab...'; });
+    setState(() { searchingOnline = true; status = 'Pesquisando GitHub, GitLab, Internet Archive e SourceForge...'; });
     try {
       final results = await MultiSourceSearch().search(search);
       if (!mounted) return;
@@ -157,7 +157,7 @@ class _StoreHomeState extends State<StoreHome> {
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
-        source = 'GitHub + GitLab (Releases publicos)';
+        source = 'GitHub + GitLab + Internet Archive + SourceForge';
         category = 'Todos';
         status = '${results.length} arquivos encontrados; origem indicada; NAO verificados';
       });
