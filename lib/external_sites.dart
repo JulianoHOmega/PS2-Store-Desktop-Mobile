@@ -13,7 +13,6 @@ const externalSites = <ExternalSite>[
   ExternalSite('Jogos Traduzidos', 'https://jogostraduzidos.com.br/'),
   ExternalSite('Allves Games', 'https://allvesgames.com/jogos-de-ps2-traduzidos-ou-dublados-em-portugues-lista/'),
   ExternalSite('Dubs Gamer', 'https://dubsgamer.com/'),
-  ExternalSite('João13 Traduções', 'https://joao13traducoes.com/2025/02/tabela-sony-playstation-2/'),
   ExternalSite('Vimm’s Lair', 'https://vimm.net/'),
   ExternalSite('CoolROM Austrália', 'https://coolrom.com.au/roms/ps2/'),
   ExternalSite('HexRom', 'https://hexrom.com/'),

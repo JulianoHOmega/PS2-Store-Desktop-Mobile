@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -53,6 +54,13 @@ class _StoreHomeState extends State<StoreHome> {
   bool cancelRequested = false;
   bool busy = false;
   bool searchingOnline = false;
+  bool hasSearched = false;
+  bool paused = false;
+  Completer<void>? resumeSignal;
+  final List<StoreApp> downloadQueue = [];
+  StoreApp? lastFailedDownload;
+  int visibleCount = 30;
+  String? activeSearchQuery;
   double progress = 0;
   double downloadSpeed = 0;
   int downloadedBytes = 0;
@@ -149,11 +157,13 @@ class _StoreHomeState extends State<StoreHome> {
   }
 
   Future<void> searchOnline() async {
-    if (busy || searchingOnline) return;
-    setState(() { searchingOnline = true; status = 'Pesquisando fontes publicas e 15 sites adicionais...'; });
+    if (busy || searchingOnline || search.trim().isEmpty) return;
+    final query = search.trim();
+    activeSearchQuery = query;
+    setState(() { searchingOnline = true; hasSearched = true; apps = []; visibleCount = 30; status = 'Pesquisando fontes publicas...'; });
     try {
-      final results = await MultiSourceSearch().search(search);
-      if (!mounted) return;
+      final results = await MultiSourceSearch().search(query);
+      if (!mounted || activeSearchQuery != query) return;
       setState(() {
         apps = results.map((r) => StoreApp(
           id: r.id, title: r.title, description: r.description,
@@ -166,7 +176,7 @@ class _StoreHomeState extends State<StoreHome> {
         status = '${results.length} resultados encontrados';
       });
     } catch (e) {
-      if (mounted) setState(() => status = 'Busca online indisponivel: $e');
+      if (mounted && activeSearchQuery == query) setState(() => status = 'Busca online indisponivel: $e');
     } finally {
       if (mounted) setState(() => searchingOnline = false);
     }
@@ -174,18 +184,48 @@ class _StoreHomeState extends State<StoreHome> {
 
   void cancelDownload() {
     if (!busy) return;
+    paused = false;
+    if (resumeSignal != null && !resumeSignal!.isCompleted) resumeSignal!.complete();
+    resumeSignal = null;
     cancelRequested = true;
     activeDownloadClient?.close(force: true);
     if (mounted) setState(() => status = 'Cancelando download...');
   }
 
+  void queueDownload(StoreApp app) {
+    if (busy) {
+      if (!downloadQueue.any((a) => a.downloadUrl == app.downloadUrl)) {
+        setState(() { downloadQueue.add(app); status = 'Adicionado a fila: ${app.title}'; });
+      }
+      return;
+    }
+    unawaited(download(app));
+  }
+
+  void pauseDownload() {
+    if (!busy || paused) return;
+    setState(() { paused = true; status = 'Download pausado'; });
+  }
+
+  void resumeDownload() {
+    if (!busy || !paused) return;
+    setState(() { paused = false; status = 'Retomando download...'; });
+    final signal = resumeSignal;
+    resumeSignal = null;
+    if (signal != null && !signal.isCompleted) signal.complete();
+  }
+
+  void removeFromQueue(int index) {
+    if (index >= 0 && index < downloadQueue.length) setState(() => downloadQueue.removeAt(index));
+  }
+
   Future<void> download(StoreApp app) async {
-    if (busy) return;
+    if (busy) { queueDownload(app); return; }
     final uri = Uri.tryParse(app.downloadUrl);
     if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http') || uri.host.isEmpty) {
       setState(() => status = 'Este aplicativo nao possui um link valido.'); return;
     }
-    setState(() { busy = true; cancelRequested = false; progress = 0; downloadSpeed = 0; downloadedBytes = 0; totalDownloadBytes = -1; status = 'Iniciando download de ${app.title}...'; });
+    setState(() { busy = true; paused = false; cancelRequested = false; progress = 0; downloadSpeed = 0; downloadedBytes = 0; totalDownloadBytes = -1; status = 'Iniciando download de ${app.title}...'; });
     HttpClient? client;
     File? temp;
     try {
@@ -218,6 +258,11 @@ class _StoreHomeState extends State<StoreHome> {
       try {
         await for (final chunk in res) {
           if (cancelRequested) throw const DownloadCancelled();
+          if (paused) {
+            resumeSignal ??= Completer<void>();
+            await resumeSignal!.future;
+            if (cancelRequested) throw const DownloadCancelled();
+          }
           sink.add(chunk);
           received += chunk.length;
           // Evita reconstruir toda a interface a cada pequeno bloco de rede.
@@ -257,12 +302,21 @@ class _StoreHomeState extends State<StoreHome> {
         await recordDownload(app, safeName, target.path);
       }
     } catch (e) {
-      if (mounted) setState(() => status = cancelRequested || e is DownloadCancelled ? 'Download cancelado.' : 'Falha no download: $e');
+      if (mounted) setState(() {
+        if (!cancelRequested && e is! DownloadCancelled) lastFailedDownload = app;
+        status = cancelRequested || e is DownloadCancelled ? 'Download cancelado.' : 'Falha no download: $e';
+      });
     } finally {
       try { if (temp != null && await temp.exists()) await temp.delete(); } catch (_) {}
       client?.close(force: true);
       activeDownloadClient = null;
-      if (mounted) setState(() => busy = false);
+      if (mounted) {
+        setState(() { busy = false; paused = false; });
+        if (downloadQueue.isNotEmpty) {
+          final next = downloadQueue.removeAt(0);
+          unawaited(download(next));
+        }
+      }
     }
   }
 
@@ -282,8 +336,18 @@ class _StoreHomeState extends State<StoreHome> {
         const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Pagina de catalogo: download direto indisponivel' : app.downloadUrl,
           style: const TextStyle(fontSize: 12, color: Colors.lightBlueAccent))]))),
     actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
-      FilledButton.icon(onPressed: app.downloadUrl.isEmpty || busy ? null : () { Navigator.pop(context); download(app); },
-        icon: const Icon(Icons.download), label: const Text('Baixar'))]));
+      FilledButton.icon(onPressed: app.downloadUrl.isEmpty ? null : () { Navigator.pop(context); queueDownload(app); },
+        icon: const Icon(Icons.download), label: Text(busy ? 'Adicionar a fila' : 'Baixar'))]));
+
+  String _sourceSummary() {
+    final counts = <String, int>{};
+    for (final app in apps) {
+      final provider = ResultPresentation.source(app.developer, app.projectUrl);
+      counts[provider] = (counts[provider] ?? 0) + 1;
+    }
+    final ordered = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return ordered.map((e) => '${e.key}: ${e.value}').join(' • ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +357,7 @@ class _StoreHomeState extends State<StoreHome> {
     final filtered = apps.where((a) => (category == 'Todos' || a.category == category) &&
       (formatFilter == 'Todos' || ResultPresentation.format(a.downloadUrl, a.title) == formatFilter) &&
       (sourceFilter == 'Todas' || ResultPresentation.source(a.developer, a.projectUrl) == sourceFilter) &&
-      '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains(search.toLowerCase())).toList();
+      '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains((activeSearchQuery ?? '').toLowerCase().trim())).toList();
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE by JulianoHOmega', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Container(decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/omega_background.jpeg'), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Color(0xB9000000), BlendMode.darken))), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
@@ -313,11 +377,27 @@ class _StoreHomeState extends State<StoreHome> {
               onPressed: cancelRequested ? null : cancelDownload,
               icon: const Icon(Icons.cancel_outlined), label: const Text('Cancelar download'))),
           ])),
-          const SizedBox(height: 18), TextFormField(onChanged: (v) => setState(() => search = v),
+          if (busy) Row(children: [
+            TextButton.icon(onPressed: paused ? resumeDownload : pauseDownload,
+              icon: Icon(paused ? Icons.play_arrow : Icons.pause), label: Text(paused ? 'Continuar' : 'Pausar')),
+            Text('Fila: ${downloadQueue.length}'),
+          ]),
+          if (downloadQueue.isNotEmpty) SizedBox(height: 45, child: ListView.builder(
+            scrollDirection: Axis.horizontal, itemCount: downloadQueue.length,
+            itemBuilder: (context, index) => InputChip(
+              label: Text(downloadQueue[index].title, overflow: TextOverflow.ellipsis),
+              onDeleted: () => removeFromQueue(index)))),
+          if (!busy && lastFailedDownload != null) TextButton.icon(
+            onPressed: () { final app = lastFailedDownload!; setState(() => lastFailedDownload = null); queueDownload(app); },
+            icon: const Icon(Icons.refresh), label: const Text('Tentar novamente')),
+          const SizedBox(height: 18), TextFormField(
+            textInputAction: TextInputAction.search,
+            onFieldSubmitted: (_) => searchOnline(),
+            onChanged: (v) => setState(() { search = v; hasSearched = false; apps = []; activeSearchQuery = null; visibleCount = 30; }),
             decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar OPL, ELF, ISO, ZIP, RAR...' , border: OutlineInputBorder())),
           const SizedBox(height: 10), Row(children: [
-            FilledButton.icon(onPressed: busy || searchingOnline ? null : searchOnline,
-              icon: const Icon(Icons.public), label: const Text('Buscar na internet')),
+            FilledButton.icon(onPressed: busy || searchingOnline || search.trim().isEmpty ? null : searchOnline,
+              icon: const Icon(Icons.public), label: const Text('Buscar')),
             const SizedBox(width: 12),
             if (searchingOnline) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             const Spacer(),
@@ -327,6 +407,10 @@ class _StoreHomeState extends State<StoreHome> {
               label: Text('Historico (${completedDownloads.length})')),
           ]),
 
+          if (hasSearched && !searchingOnline && apps.isNotEmpty)
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text(
+              'Resultados por origem: ${_sourceSummary()}',
+              style: const TextStyle(fontSize: 12, color: Colors.white70))),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
@@ -335,12 +419,14 @@ class _StoreHomeState extends State<StoreHome> {
             DropdownButton<String>(value: formatFilter, hint: const Text('Formato'), items: formats.map((f) => DropdownMenuItem(value: f, child: Text('Formato: $f'))).toList(), onChanged: (v) => setState(() => formatFilter = v ?? 'Todos')),
             DropdownButton<String>(value: sourceFilter, hint: const Text('Origem'), items: sources.map((f) => DropdownMenuItem(value: f, child: Text('Origem: $f'))).toList(), onChanged: (v) => setState(() => sourceFilter = v ?? 'Todas')),
           ]),
-          const SizedBox(height: 8), Expanded(child: filtered.isEmpty ? Center(child: searchingOnline ? const CircularProgressIndicator() : const Text('Nenhum resultado listado. Use Buscar na internet para pesquisar.')) :
+          const SizedBox(height: 8), Expanded(child: filtered.isEmpty ? Center(child: searchingOnline
+            ? const CircularProgressIndicator()
+            : (hasSearched ? const Text('Nenhum resultado encontrado para esta pesquisa.') : const SizedBox.shrink())) :
             LayoutBuilder(builder: (context, constraints) => GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 550 ? 2 : 1,
                 mainAxisExtent: 185, mainAxisSpacing: 12, crossAxisSpacing: 12),
-              itemCount: filtered.length, itemBuilder: (context, i) {
+              itemCount: filtered.length < visibleCount ? filtered.length : visibleCount, itemBuilder: (context, i) {
                 final app = filtered[i];
                 return Card(clipBehavior: Clip.antiAlias, child: InkWell(onTap: () => showDetails(app), child: Padding(
                   padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -354,7 +440,11 @@ class _StoreHomeState extends State<StoreHome> {
                         overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
                       Icon(app.downloadUrl.isEmpty ? Icons.open_in_new : Icons.download, size: 20)])
                   ]))));
-              })))
+              }))),
+          if (filtered.length > visibleCount) Center(child: TextButton.icon(
+            onPressed: () => setState(() => visibleCount += 30),
+            icon: const Icon(Icons.expand_more),
+            label: Text('Mostrar mais (${filtered.length - visibleCount} restantes)'))),
         ]))))));
   }
 }
