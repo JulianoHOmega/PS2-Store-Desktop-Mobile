@@ -50,6 +50,9 @@ class _StoreHomeState extends State<StoreHome> {
   bool busy = false;
   bool searchingOnline = false;
   double progress = 0;
+  double downloadSpeed = 0;
+  int downloadedBytes = 0;
+  int totalDownloadBytes = -1;
   String? lastSavedPath;
   List<DownloadRecord> completedDownloads = [];
   final DownloadHistoryStore historyStore = DownloadHistoryStore();
@@ -117,7 +120,7 @@ class _StoreHomeState extends State<StoreHome> {
     setState(() => status = 'Carregando catalogo...');
     try {
       String content;
-      String loadedFrom = 'Local (demonstracao)';
+      String loadedFrom = 'Catalogo local';
       if (remoteCatalogUrl.isNotEmpty) {
         final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
         try {
@@ -171,7 +174,7 @@ class _StoreHomeState extends State<StoreHome> {
     if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http') || uri.host.isEmpty) {
       setState(() => status = 'Este aplicativo nao possui um link valido.'); return;
     }
-    setState(() { busy = true; progress = 0; status = 'Iniciando download de ${app.title}...'; });
+    setState(() { busy = true; progress = 0; downloadSpeed = 0; downloadedBytes = 0; totalDownloadBytes = -1; status = 'Iniciando download de ${app.title}...'; });
     HttpClient? client;
     File? temp;
     try {
@@ -198,16 +201,29 @@ class _StoreHomeState extends State<StoreHome> {
       temp = File('${folder.path}${Platform.pathSeparator}${DateTime.now().microsecondsSinceEpoch}_$safeName.part');
       final sink = temp.openWrite();
       var received = 0;
+      final watch = Stopwatch()..start();
+      var lastUpdateMs = 0;
       try {
         await for (final chunk in res) {
           sink.add(chunk);
           received += chunk.length;
-          if (mounted) setState(() {
-            progress = res.contentLength > 0 ? received / res.contentLength : 0;
-            status = 'Baixando $safeName: ${(received / 1048576).toStringAsFixed(1)} MB';
-          });
+          // Evita reconstruir toda a interface a cada pequeno bloco de rede.
+          final elapsedMs = watch.elapsedMilliseconds;
+          if (mounted && (elapsedMs - lastUpdateMs >= 250 ||
+              (res.contentLength > 0 && received >= res.contentLength))) {
+            lastUpdateMs = elapsedMs;
+            setState(() {
+              downloadedBytes = received;
+              totalDownloadBytes = res.contentLength;
+              downloadSpeed = elapsedMs > 0 ? received * 1000 / elapsedMs : 0;
+              progress = res.contentLength > 0 ?
+                  (received / res.contentLength).clamp(0.0, 1.0) : 0;
+              status = 'Baixando $safeName';
+            });
+          }
         }
       } finally { await sink.close(); }
+      if (mounted) setState(() { downloadedBytes = received; totalDownloadBytes = res.contentLength; progress = 1; });
       if (res.contentLength >= 0 && received != res.contentLength) throw const HttpException('Download incompleto');
       if (Platform.isAndroid) {
         // O Android usa o seletor nativo: o usuario pode escolher Downloads.
@@ -263,7 +279,12 @@ class _StoreHomeState extends State<StoreHome> {
           const SizedBox(height: 5), Text('Fonte: $source  •  $status', maxLines: 3, overflow: TextOverflow.ellipsis),
           if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             LinearProgressIndicator(value: progress > 0 ? progress : null),
-            const SizedBox(height: 4), Text(progress > 0 ? '${(progress * 100).toStringAsFixed(0)}%' : 'Recebendo dados...', style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 4), Text(
+              '${fileSize(downloadedBytes)} recebidos'
+              '${totalDownloadBytes > 0 ? ' de ${fileSize(totalDownloadBytes)}' : ''}'
+              ' • ${(downloadSpeed / 1024).toStringAsFixed(0)} KB/s'
+              '${totalDownloadBytes > 0 ? ' • ${(progress * 100).toStringAsFixed(0)}%' : ''}',
+              style: const TextStyle(fontSize: 12)),
           ])),
           const SizedBox(height: 18), TextField(onChanged: (v) => setState(() => search = v),
             decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar homebrews e utilitarios', border: OutlineInputBorder())),
@@ -282,7 +303,7 @@ class _StoreHomeState extends State<StoreHome> {
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
           ])),
-          const SizedBox(height: 12), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo encontrado')) :
+          const SizedBox(height: 12), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar no GitHub para encontrar projetos publicos.')) :
             LayoutBuilder(builder: (context, constraints) => GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 550 ? 2 : 1,

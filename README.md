@@ -1,55 +1,11 @@
-# PS2 Store Desktop & Mobile v0.3
+# PS2 Store Desktop & Mobile v0.9
 
-Projeto Flutter para Windows, Linux e Android. Este pacote e **completo**, nao e um patch.
+Versao baseada na v0.8 validada pelo usuario no Windows 10.
 
-## Repositorio novo
-1. Crie um repositorio GitHub vazio (sem README, .gitignore ou licenca automatica).
-2. Extraia este ZIP. Envie **o conteudo** da pasta extraida para a raiz do repositorio, incluindo `.github/workflows/build.yml`.
-3. Na aba Actions, acompanhe os jobs Windows, Linux e Android. Se nao iniciar automaticamente, use Run workflow.
-4. Baixe os arquivos em Artifacts: PS2Store-Windows, PS2Store-Linux e PS2Store-Android-APK.
-5. No Windows, extraia o ZIP de Windows inteiro e execute o .exe dentro da pasta extraida. Nao mova apenas o .exe.
+**Alteracoes:** catalogo demonstrativo removido; progresso com velocidade media e bytes; atualizacao visual limitada.
 
-## Correcao do erro anterior
-Os pacotes anteriores nao continham `test/`, e `flutter create` gerava automaticamente um `test/widget_test.dart` de exemplo com importacao incorreta. Como `flutter analyze` verifica tambem testes, o job Windows falhava. Este pacote inclui **test/catalog_test.dart** valido, com `flutter_test` no `pubspec.yaml`, antes de `flutter create`. Assim o Flutter nao precisa gerar um teste padrao e os testes reais sao executados.
+**Compilacao:** envie os arquivos para o mesmo repositorio GitHub, incluindo `.github/workflows/build.yml`. O workflow compila Windows, Linux e Android.
 
-## Estado
-O catalogo incluso e demonstrativo. Os links de download podem ser exemplos e nao devem ser tratados como arquivos reais. A busca automatica na internet ainda nao foi implementada. Este pacote foi revisado estruturalmente, mas nao compilado localmente por ausencia do Flutter SDK; GitHub Actions fara a validacao.
+**Teste:** pesquise no GitHub, baixe um arquivo de projeto confiavel, verifique a pasta Downloads, velocidade, tamanho e historico apos reiniciar.
 
-## Correcao v0.3.1
-O workflow remove test/widget_test.dart que o comando flutter create gera automaticamente, mantendo o teste real test/catalog_test.dart. Inclui flutter_lints para analysis_options.yaml gerado pelo Flutter.
-
-No GitHub, envie todos os arquivos para a raiz e crie .github/workflows/build.yml com o conteudo fornecido se a interface nao permitir enviar pastas ocultas.
-
-
-## v0.4 — Destino dos downloads
-
-- Windows e Linux: grava diretamente na pasta Downloads do sistema (via `getDownloadsDirectory`).
-- Android: baixa temporariamente e abre o seletor nativo de salvamento; escolha **Downloads**. O Android pode exigir essa confirmacao para salvar em pasta publica.
-- Barra de progresso mostra porcentagem quando o servidor informa o tamanho.
-- Download incompleto e arquivos temporarios sao descartados em caso de falha.
-- A versao ainda usa o catalogo demonstrativo. Nao ha links reais de download nos exemplos.
-- Os workflows permanecem iguais aos da v0.3.1, exceto pelas dependencias do aplicativo.
-
-**Validacao pendente:** compilar as tres plataformas no GitHub Actions e testar o salvamento em Windows e Android.
-
-
-## v0.5 - Busca experimental no GitHub
-
-- Na interface, digite um termo e clique em **Buscar no GitHub**.
-- Busca repositorios publicos com termos `ps2 homebrew`, consulta ate oito Releases e mostra o primeiro arquivo `.elf`, `.zip` ou `.7z` de cada projeto.
-- A pesquisa **nao valida automaticamente** compatibilidade PS2, seguranca ou permissao de redistribuicao. Confira a origem/licenca.
-- A API publica do GitHub tem limites e a busca pode retornar zero resultados.
-- O botao de atualizar retorna ao catalogo demonstrativo local.
-- Downloads usam a implementacao da v0.4; no Android abre o seletor de destino.
-- O workflow `.github/workflows/build.yml` foi preservado integralmente.
-- Ainda nao compilado/testado em Flutter neste ambiente.
-
-
-## Atualizacao v0.8
-
-- Historico de downloads: botao **Historico** mostra os ultimos 100 downloads concluídos, inclusive apos reiniciar o aplicativo.
-- Registro em JSON na pasta de suporte do aplicativo (nao na pasta Downloads).
-- Downloads continuam salvos na pasta Downloads do Windows/Linux e pelo seletor no Android.
-- Busca remove resultados repetidos do mesmo repositorio.
-- Esta versao nao implementa retomada de downloads; se uma transferencia falhar, sera necessario recomecar.
-- Compilacao e testes reais devem ser feitos pelo GitHub Actions e no dispositivo.
+**Avisos:** a compatibilidade e a seguranca dos arquivos encontrados nao sao verificadas automaticamente. A v0.9 ainda nao oferece retomar downloads interrompidos.
