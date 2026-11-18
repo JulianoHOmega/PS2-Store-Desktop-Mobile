@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/result_presentation.dart';
+import 'package:ps2_store/result_presentation.dart';
 
 void main() {
   test('remove tags HTML e entidades comuns', () {

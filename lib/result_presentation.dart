@@ -28,7 +28,7 @@ class ResultPresentation {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? '';
     final combined = '$path $title'.toLowerCase();
     for (final ext in ['iso', 'elf', 'zip', '7z', 'rar']) {
-      if (RegExp('\\.$ext(?=\\b|\\s|\\?|\\$)', caseSensitive: false).hasMatch(combined)) return ext.toUpperCase();
+      if (RegExp(r'\.' + ext + r'(?=\b|\s|\?|$)', caseSensitive: false).hasMatch(combined)) return ext.toUpperCase();
     }
     return 'Outro';
   }
