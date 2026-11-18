@@ -11,16 +11,18 @@ const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '')
 void main() => runApp(const Ps2StoreApp());
 
 class StoreApp {
-  final String id, title, description, category, version, license, downloadUrl, cover;
+  final String id, title, description, category, version, license, downloadUrl, cover, projectUrl;
+  final int sizeBytes;
   const StoreApp({required this.id, required this.title, required this.description,
     required this.category, required this.version, required this.license,
-    required this.downloadUrl, required this.cover});
+    required this.downloadUrl, required this.cover, this.projectUrl = '', this.sizeBytes = 0});
   factory StoreApp.fromJson(Map<String, dynamic> json) {
     String value(String key, [String fallback = '']) => json[key]?.toString() ?? fallback;
     return StoreApp(id: value('id'), title: value('title', 'Sem titulo'),
       description: value('description'), category: value('category', 'Outros'),
       version: value('version', '—'), license: value('license', 'Nao informada'),
-      downloadUrl: value('download_url', value('url')), cover: value('cover'));
+      downloadUrl: value('download_url', value('url')), cover: value('cover'),
+      projectUrl: value('project_url'), sizeBytes: int.tryParse(value('size_bytes')) ?? 0);
   }
 }
 
@@ -47,6 +49,26 @@ class _StoreHomeState extends State<StoreHome> {
   bool searchingOnline = false;
   double progress = 0;
   String? lastSavedPath;
+  final List<String> completedDownloads = [];
+
+  String fileSize(int bytes) => bytes <= 0 ? 'Tamanho nao informado'
+    : bytes >= 1048576 ? '${(bytes / 1048576).toStringAsFixed(1)} MB'
+    : '${(bytes / 1024).toStringAsFixed(0)} KB';
+
+  Future<void> openDownloadsFolder() async {
+    if (Platform.isAndroid) return;
+    try {
+      final folder = await getDownloadsDirectory();
+      if (folder == null) throw const FileSystemException('Pasta Downloads indisponivel');
+      if (Platform.isWindows) {
+        await Process.start('explorer.exe', [folder.path], mode: ProcessStartMode.detached);
+      } else if (Platform.isLinux) {
+        await Process.start('xdg-open', [folder.path], mode: ProcessStartMode.detached);
+      }
+    } catch (e) {
+      if (mounted) setState(() => status = 'Nao foi possivel abrir Downloads: $e');
+    }
+  }
   @override
   void initState() { super.initState(); loadCatalog(); }
 
@@ -89,6 +111,7 @@ class _StoreHomeState extends State<StoreHome> {
           id: r.id, title: r.title, description: r.description,
           category: 'GitHub', version: r.version, license: r.license,
           downloadUrl: r.downloadUrl, cover: '',
+          projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
         source = 'GitHub (Releases publicos)';
         category = 'Todos';
@@ -152,12 +175,14 @@ class _StoreHomeState extends State<StoreHome> {
         if (saved == null) {
           if (mounted) setState(() => status = 'Salvamento cancelado.');
         } else {
-          if (mounted) setState(() { lastSavedPath = null; status = 'Arquivo salvo no local escolhido.'; });
+          if (mounted) setState(() { lastSavedPath = null; completedDownloads.insert(0, safeName);
+            status = 'Arquivo salvo no local escolhido.'; });
         }
       } else {
         await temp.rename(target.path);
         temp = null;
-        if (mounted) setState(() { lastSavedPath = target.path; status = 'Download concluido: ${target.path}'; });
+        if (mounted) setState(() { lastSavedPath = target.path; completedDownloads.insert(0, safeName);
+          status = 'Download concluido: ${target.path}'; });
       }
     } catch (e) {
       if (mounted) setState(() => status = 'Falha no download: $e');
@@ -172,7 +197,11 @@ class _StoreHomeState extends State<StoreHome> {
     title: Text(app.title), content: SizedBox(width: 420, child: SingleChildScrollView(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
       children: [Text(app.description), const SizedBox(height: 16), Text('Categoria: ${app.category}'),
-        Text('Versao: ${app.version}'), Text('Licenca: ${app.license}'),
+        Text('Versao: ${app.version}'), Text('Licenca declarada: ${app.license}'),
+        Text('Tamanho: ${fileSize(app.sizeBytes)}'),
+        Text('Compatibilidade PS2: NAO VERIFICADA',
+          style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+        if (app.projectUrl.isNotEmpty) SelectableText('Projeto: ${app.projectUrl}'),
         const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Download indisponivel' : app.downloadUrl,
           style: const TextStyle(fontSize: 12, color: Colors.lightBlueAccent))]))),
     actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
@@ -201,6 +230,12 @@ class _StoreHomeState extends State<StoreHome> {
               icon: const Icon(Icons.public), label: const Text('Buscar no GitHub')),
             const SizedBox(width: 12),
             if (searchingOnline) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            const Spacer(),
+            if (!Platform.isAndroid) TextButton.icon(onPressed: openDownloadsFolder,
+              icon: const Icon(Icons.folder_open), label: const Text('Abrir Downloads')),
+            if (completedDownloads.isNotEmpty) Tooltip(
+              message: completedDownloads.take(5).join('\n'),
+              child: Chip(label: Text('${completedDownloads.length} download(s) nesta sessao'))),
           ]),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
@@ -219,8 +254,9 @@ class _StoreHomeState extends State<StoreHome> {
                       Expanded(child: Text(app.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)))]),
                     const SizedBox(height: 8), Text(app.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const Spacer(), Row(children: [Text('${app.category} • v${app.version}', style: const TextStyle(fontSize: 12)),
-                      const Spacer(), Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
+                    const Spacer(), Row(children: [Expanded(child: Text('${app.category} • v${app.version} • ${fileSize(app.sizeBytes)}',
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                      Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
                   ]))));
               })))
         ])))));

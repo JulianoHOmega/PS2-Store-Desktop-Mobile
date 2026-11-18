@@ -3,15 +3,17 @@ import 'dart:io';
 
 /// Pesquisa limitada a repositorios publicos; nao e um indice de toda a web.
 class GitHubResult {
-  final String id, title, description, version, license, downloadUrl;
+  final String id, title, description, version, license, downloadUrl, projectUrl;
+  final int sizeBytes;
   const GitHubResult({required this.id, required this.title, required this.description,
-    required this.version, required this.license, required this.downloadUrl});
+    required this.version, required this.license, required this.downloadUrl,
+    required this.projectUrl, required this.sizeBytes});
 }
 
 class GitHubHomebrewSearch {
   Future<dynamic> _get(HttpClient client, Uri uri) async {
     final req = await client.getUrl(uri).timeout(const Duration(seconds: 15));
-    req.headers.set(HttpHeaders.userAgentHeader, 'PS2Store/0.5');
+    req.headers.set(HttpHeaders.userAgentHeader, 'PS2Store/0.6');
     req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
     final res = await req.close().timeout(const Duration(seconds: 20));
     final body = await utf8.decoder.bind(res).join().timeout(const Duration(seconds: 20));
@@ -59,6 +61,8 @@ class GitHubHomebrewSearch {
             description: repo['description']?.toString() ?? 'Projeto publico no GitHub; compatibilidade nao verificada.',
             version: releaseData['tag_name']?.toString() ?? 'Sem versao',
             license: license, downloadUrl: url,
+            projectUrl: repo['html_url']?.toString() ?? '',
+            sizeBytes: (asset['size'] as num?)?.toInt() ?? 0,
           ));
           break; // Um arquivo por repositorio nesta primeira versao.
         }
