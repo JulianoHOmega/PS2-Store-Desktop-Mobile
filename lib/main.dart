@@ -151,7 +151,7 @@ class _StoreHomeState extends State<StoreHome> {
 
   Future<void> searchOnline() async {
     if (busy || searchingOnline) return;
-    setState(() { searchingOnline = true; status = 'Pesquisando GitHub, GitLab, Internet Archive, SourceForge e Codeberg...'; });
+    setState(() { searchingOnline = true; status = 'Pesquisando fontes publicas e 15 sites adicionais...'; });
     try {
       final results = await MultiSourceSearch().search(search);
       if (!mounted) return;
@@ -162,9 +162,9 @@ class _StoreHomeState extends State<StoreHome> {
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
-        source = 'GitHub + GitLab + Internet Archive + SourceForge + Codeberg';
+        source = 'Busca unificada';
         category = 'Todos'; formatFilter = 'Todos'; sourceFilter = 'Todas';
-        status = '${results.length} arquivos encontrados';
+        status = '${results.length} resultados encontrados';
       });
     } catch (e) {
       if (mounted) setState(() => status = 'Busca online indisponivel: $e');
@@ -280,7 +280,7 @@ class _StoreHomeState extends State<StoreHome> {
           onPressed: () => launchUrl(Uri.parse(app.projectUrl), mode: LaunchMode.externalApplication),
           icon: const Icon(Icons.open_in_new), label: const Text('Abrir pagina original')),
         if (app.projectUrl.isNotEmpty) SelectableText('Projeto: ${app.projectUrl}'),
-        const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Download indisponivel' : app.downloadUrl,
+        const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Pagina de catalogo: download direto indisponivel' : app.downloadUrl,
           style: const TextStyle(fontSize: 12, color: Colors.lightBlueAccent))]))),
     actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
       FilledButton.icon(onPressed: app.downloadUrl.isEmpty || busy ? null : () { Navigator.pop(context); download(app); },
@@ -300,7 +300,7 @@ class _StoreHomeState extends State<StoreHome> {
       body: Container(decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/omega_background.jpeg'), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Color(0xB9000000), BlendMode.darken))), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Busca de arquivos ELF, ISO e compactados', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
-          if (searchingOnline || busy || status.startsWith('Falha') || status.startsWith('Download') || status.startsWith('Busca online') || status.contains('arquivos encontrados'))
+          if (searchingOnline || busy || status.startsWith('Falha') || status.startsWith('Download') || status.startsWith('Busca online') || status.contains('resultados encontrados'))
             Text(status, maxLines: 2, overflow: TextOverflow.ellipsis),
           if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             LinearProgressIndicator(value: progress > 0 ? progress : null),
@@ -327,10 +327,7 @@ class _StoreHomeState extends State<StoreHome> {
             TextButton.icon(onPressed: showDownloadHistory, icon: const Icon(Icons.history),
               label: Text('Historico (${completedDownloads.length})')),
           ]),
-          const SizedBox(height: 10), OutlinedButton.icon(
-            onPressed: () => showExternalSites(context, search),
-            icon: const Icon(Icons.travel_explore),
-            label: const Text('Pesquisar em 15 sites adicionais')),
+
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
@@ -356,7 +353,7 @@ class _StoreHomeState extends State<StoreHome> {
                       style: const TextStyle(fontSize: 11, color: Colors.white70)),
                     const Spacer(), Row(children: [Expanded(child: Text('${app.category} • ${ResultPresentation.format(app.downloadUrl, app.title)} • ${fileSize(app.sizeBytes)}',
                         overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
-                      Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
+                      Icon(app.downloadUrl.isEmpty ? Icons.open_in_new : Icons.download, size: 20)])
                   ]))));
               })))
         ]))))));

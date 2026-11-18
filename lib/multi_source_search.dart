@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:xml/xml.dart';
 import 'github_search.dart';
 import 'search_quality.dart';
+import 'site_index_search.dart';
 
 /// Public APIs only. A result is not a compatibility, safety or rights check.
 class MultiSourceSearch {
@@ -29,7 +30,7 @@ class MultiSourceSearch {
     final results = <GitHubResult>[];
     try {
       // Independent providers: a failure in one must not discard the other.
-      await Future.wait([_github(client, query, results), _gitlab(client, query, results), _archive(client, query, results), _sourceForge(client, query, results), _codeberg(client, query, results)]);
+      await Future.wait([_github(client, query, results), _gitlab(client, query, results), _archive(client, query, results), _sourceForge(client, query, results), _codeberg(client, query, results), _additionalSites(query, results)]);
       final seen = <String>{};
       results.sort((a, b) => b.relevanceScore.compareTo(a.relevanceScore));
       // One visible card per project; releases/assets from the same project do not flood the screen.
@@ -42,6 +43,11 @@ class MultiSourceSearch {
     }
   }
 
+
+  Future<void> _additionalSites(String query, List<GitHubResult> out) async {
+    try { out.addAll(await SiteIndexSearch().search(query)); }
+    catch (_) { /* Other providers remain available. */ }
+  }
 
   Future<String> _text(HttpClient client, Uri uri) async {
     final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
