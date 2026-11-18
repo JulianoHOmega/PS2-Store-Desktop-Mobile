@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'external_sites.dart';
 import 'multi_source_search.dart';
 import 'download_history.dart';
 import 'result_presentation.dart';
