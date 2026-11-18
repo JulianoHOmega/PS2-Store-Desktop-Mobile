@@ -19,3 +19,15 @@ O catalogo incluso e demonstrativo. Os links de download podem ser exemplos e na
 O workflow remove test/widget_test.dart que o comando flutter create gera automaticamente, mantendo o teste real test/catalog_test.dart. Inclui flutter_lints para analysis_options.yaml gerado pelo Flutter.
 
 No GitHub, envie todos os arquivos para a raiz e crie .github/workflows/build.yml com o conteudo fornecido se a interface nao permitir enviar pastas ocultas.
+
+
+## v0.4 — Destino dos downloads
+
+- Windows e Linux: grava diretamente na pasta Downloads do sistema (via `getDownloadsDirectory`).
+- Android: baixa temporariamente e abre o seletor nativo de salvamento; escolha **Downloads**. O Android pode exigir essa confirmacao para salvar em pasta publica.
+- Barra de progresso mostra porcentagem quando o servidor informa o tamanho.
+- Download incompleto e arquivos temporarios sao descartados em caso de falha.
+- A versao ainda usa o catalogo demonstrativo. Nao ha links reais de download nos exemplos.
+- Os workflows permanecem iguais aos da v0.3.1, exceto pelas dependencias do aplicativo.
+
+**Validacao pendente:** compilar as tres plataformas no GitHub Actions e testar o salvamento em Windows e Android.

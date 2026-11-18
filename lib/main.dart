@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 
 const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '');
 
@@ -43,6 +44,7 @@ class _StoreHomeState extends State<StoreHome> {
   String search = '', category = 'Todos', status = 'Carregando catalogo...', source = 'Local';
   bool busy = false;
   double progress = 0;
+  String? lastSavedPath;
   @override
   void initState() { super.initState(); loadCatalog(); }
 
@@ -88,14 +90,23 @@ class _StoreHomeState extends State<StoreHome> {
       final req = await client.getUrl(uri);
       final res = await req.close().timeout(const Duration(seconds: 30));
       if (res.statusCode != HttpStatus.ok) throw HttpException('HTTP ${res.statusCode}');
-      final dir = await getApplicationDocumentsDirectory();
-      final folder = Directory('${dir.path}${Platform.pathSeparator}PS2Store${Platform.pathSeparator}Downloads');
-      await folder.create(recursive: true);
       final filename = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
       final safeName = filename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       if (safeName.isEmpty || safeName == '.' || safeName == '..') throw const FormatException('Nome de arquivo invalido');
+      final Directory folder;
+      if (Platform.isAndroid) {
+        folder = await getTemporaryDirectory();
+      } else {
+        final downloads = await getDownloadsDirectory();
+        if (downloads == null) throw const FileSystemException('Pasta Downloads nao encontrada');
+        folder = downloads;
+      }
+      await folder.create(recursive: true);
       final target = File('${folder.path}${Platform.pathSeparator}$safeName');
-      temp = File('${target.path}.part');
+      if (!Platform.isAndroid && await target.exists()) {
+        throw const FileSystemException('Arquivo ja existe na pasta Downloads');
+      }
+      temp = File('${folder.path}${Platform.pathSeparator}${DateTime.now().microsecondsSinceEpoch}_$safeName.part');
       final sink = temp.openWrite();
       var received = 0;
       try {
@@ -109,10 +120,20 @@ class _StoreHomeState extends State<StoreHome> {
         }
       } finally { await sink.close(); }
       if (res.contentLength >= 0 && received != res.contentLength) throw const HttpException('Download incompleto');
-      if (await target.exists()) throw const FileSystemException('Arquivo ja existe; renomeie ou mova antes de baixar novamente');
-      await temp.rename(target.path);
-      temp = null;
-      if (mounted) setState(() => status = 'Download concluido: ${target.path}');
+      if (Platform.isAndroid) {
+        // O Android usa o seletor nativo: o usuario pode escolher Downloads.
+        final saved = await FlutterFileDialog.saveFile(params: SaveFileDialogParams(
+          sourceFilePath: temp.path, fileName: safeName));
+        if (saved == null) {
+          if (mounted) setState(() => status = 'Salvamento cancelado.');
+        } else {
+          if (mounted) setState(() { lastSavedPath = null; status = 'Arquivo salvo no local escolhido.'; });
+        }
+      } else {
+        await temp.rename(target.path);
+        temp = null;
+        if (mounted) setState(() { lastSavedPath = target.path; status = 'Download concluido: ${target.path}'; });
+      }
     } catch (e) {
       if (mounted) setState(() => status = 'Falha no download: $e');
     } finally {
@@ -144,7 +165,10 @@ class _StoreHomeState extends State<StoreHome> {
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Biblioteca digital de homebrews', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
           const SizedBox(height: 5), Text('Fonte: $source  •  $status', maxLines: 3, overflow: TextOverflow.ellipsis),
-          if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: LinearProgressIndicator(value: progress > 0 ? progress : null)),
+          if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            LinearProgressIndicator(value: progress > 0 ? progress : null),
+            const SizedBox(height: 4), Text(progress > 0 ? '${(progress * 100).toStringAsFixed(0)}%' : 'Recebendo dados...', style: const TextStyle(fontSize: 12)),
+          ])),
           const SizedBox(height: 18), TextField(onChanged: (v) => setState(() => search = v),
             decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar homebrews e utilitarios', border: OutlineInputBorder())),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
