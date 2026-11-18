@@ -13,16 +13,17 @@ void main() => runApp(const Ps2StoreApp());
 class StoreApp {
   final String id, title, description, category, version, license, downloadUrl, cover, projectUrl;
   final int sizeBytes;
+  final String developer;
   const StoreApp({required this.id, required this.title, required this.description,
     required this.category, required this.version, required this.license,
-    required this.downloadUrl, required this.cover, this.projectUrl = '', this.sizeBytes = 0});
+    required this.downloadUrl, required this.cover, this.projectUrl = '', this.sizeBytes = 0, this.developer = 'Nao informado'});
   factory StoreApp.fromJson(Map<String, dynamic> json) {
     String value(String key, [String fallback = '']) => json[key]?.toString() ?? fallback;
     return StoreApp(id: value('id'), title: value('title', 'Sem titulo'),
       description: value('description'), category: value('category', 'Outros'),
       version: value('version', '—'), license: value('license', 'Nao informada'),
       downloadUrl: value('download_url', value('url')), cover: value('cover'),
-      projectUrl: value('project_url'), sizeBytes: int.tryParse(value('size_bytes')) ?? 0);
+      projectUrl: value('project_url'), developer: value('developer', 'Nao informado'), sizeBytes: int.tryParse(value('size_bytes')) ?? 0);
   }
 }
 
@@ -109,13 +110,13 @@ class _StoreHomeState extends State<StoreHome> {
       setState(() {
         apps = results.map((r) => StoreApp(
           id: r.id, title: r.title, description: r.description,
-          category: 'GitHub', version: r.version, license: r.license,
+          category: r.category, version: r.version, license: r.license, developer: r.developer,
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
         source = 'GitHub (Releases publicos)';
         category = 'Todos';
-        status = '${results.length} arquivos encontrados; confira a origem e a licenca antes de baixar';
+        status = '${results.length} resultados relevantes; compatibilidade e seguranca NAO verificadas';
       });
     } catch (e) {
       if (mounted) setState(() => status = 'Busca online indisponivel: $e');
@@ -197,9 +198,10 @@ class _StoreHomeState extends State<StoreHome> {
     title: Text(app.title), content: SizedBox(width: 420, child: SingleChildScrollView(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
       children: [Text(app.description), const SizedBox(height: 16), Text('Categoria: ${app.category}'),
-        Text('Versao: ${app.version}'), Text('Licenca declarada: ${app.license}'),
+        Text('Versao: ${app.version}'), Text('Desenvolvedor: ${app.developer}'),
+        Text('Licenca declarada: ${app.license}'),
         Text('Tamanho: ${fileSize(app.sizeBytes)}'),
-        Text('Compatibilidade PS2: NAO VERIFICADA',
+        Text('Compatibilidade e seguranca: NAO VERIFICADAS',
           style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
         if (app.projectUrl.isNotEmpty) SelectableText('Projeto: ${app.projectUrl}'),
         const SizedBox(height: 12), Text(app.downloadUrl.isEmpty ? 'Download indisponivel' : app.downloadUrl,
@@ -212,7 +214,7 @@ class _StoreHomeState extends State<StoreHome> {
   Widget build(BuildContext context) {
     final categories = ['Todos', ...{for (final a in apps) a.category}];
     final filtered = apps.where((a) => (category == 'Todos' || a.category == category) &&
-      '${a.title} ${a.description}'.toLowerCase().contains(search.toLowerCase())).toList();
+      '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains(search.toLowerCase())).toList();
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
@@ -254,6 +256,8 @@ class _StoreHomeState extends State<StoreHome> {
                       Expanded(child: Text(app.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)))]),
                     const SizedBox(height: 8), Text(app.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4), Text('Autor: ${app.developer}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: Colors.white70)),
                     const Spacer(), Row(children: [Expanded(child: Text('${app.category} • v${app.version} • ${fileSize(app.sizeBytes)}',
                         overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
                       Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
