@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'multi_source_search.dart';
 import 'download_history.dart';
+import 'result_presentation.dart';
 
 const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '');
 
@@ -46,7 +47,9 @@ class StoreHome extends StatefulWidget {
 
 class _StoreHomeState extends State<StoreHome> {
   List<StoreApp> apps = [];
-  String search = 'OPL', category = 'Todos', status = 'Carregando catalogo...', source = 'Local';
+  String search = '', category = 'Todos', formatFilter = 'Todos', sourceFilter = 'Todas', status = 'Carregando catalogo...', source = 'Local';
+  HttpClient? activeDownloadClient;
+  bool cancelRequested = false;
   bool busy = false;
   bool searchingOnline = false;
   double progress = 0;
@@ -153,12 +156,12 @@ class _StoreHomeState extends State<StoreHome> {
       setState(() {
         apps = results.map((r) => StoreApp(
           id: r.id, title: r.title, description: r.description,
-          category: r.category, version: r.version, license: r.license, developer: r.developer,
+          category: ResultPresentation.category(r.title, r.description, r.category), version: r.version, license: r.license, developer: r.developer,
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
         source = 'GitHub + GitLab + Internet Archive + SourceForge';
-        category = 'Todos';
+        category = 'Todos'; formatFilter = 'Todos'; sourceFilter = 'Todas';
         status = '${results.length} arquivos encontrados; origem indicada; NAO verificados';
       });
     } catch (e) {
@@ -168,17 +171,25 @@ class _StoreHomeState extends State<StoreHome> {
     }
   }
 
+  void cancelDownload() {
+    if (!busy) return;
+    cancelRequested = true;
+    activeDownloadClient?.close(force: true);
+    if (mounted) setState(() => status = 'Cancelando download...');
+  }
+
   Future<void> download(StoreApp app) async {
     if (busy) return;
     final uri = Uri.tryParse(app.downloadUrl);
     if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http') || uri.host.isEmpty) {
       setState(() => status = 'Este aplicativo nao possui um link valido.'); return;
     }
-    setState(() { busy = true; progress = 0; downloadSpeed = 0; downloadedBytes = 0; totalDownloadBytes = -1; status = 'Iniciando download de ${app.title}...'; });
+    setState(() { busy = true; cancelRequested = false; progress = 0; downloadSpeed = 0; downloadedBytes = 0; totalDownloadBytes = -1; status = 'Iniciando download de ${app.title}...'; });
     HttpClient? client;
     File? temp;
     try {
       client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+      activeDownloadClient = client;
       final req = await client.getUrl(uri);
       final res = await req.close().timeout(const Duration(seconds: 30));
       if (res.statusCode != HttpStatus.ok) throw HttpException('Servidor retornou HTTP ${res.statusCode}');
@@ -205,6 +216,7 @@ class _StoreHomeState extends State<StoreHome> {
       var lastUpdateMs = 0;
       try {
         await for (final chunk in res) {
+          if (cancelRequested) throw const DownloadCancelled();
           sink.add(chunk);
           received += chunk.length;
           // Evita reconstruir toda a interface a cada pequeno bloco de rede.
@@ -223,8 +235,10 @@ class _StoreHomeState extends State<StoreHome> {
           }
         }
       } finally { await sink.close(); }
+      if (cancelRequested) throw const DownloadCancelled();
       if (mounted) setState(() { downloadedBytes = received; totalDownloadBytes = res.contentLength; progress = 1; });
       if (res.contentLength >= 0 && received != res.contentLength) throw const HttpException('Download incompleto');
+      if (cancelRequested) throw const DownloadCancelled();
       if (Platform.isAndroid) {
         // O Android usa o seletor nativo: o usuario pode escolher Downloads.
         final saved = await FlutterFileDialog.saveFile(params: SaveFileDialogParams(
@@ -242,10 +256,11 @@ class _StoreHomeState extends State<StoreHome> {
         await recordDownload(app, safeName, target.path);
       }
     } catch (e) {
-      if (mounted) setState(() => status = 'Falha no download: $e');
+      if (mounted) setState(() => status = cancelRequested || e is DownloadCancelled ? 'Download cancelado.' : 'Falha no download: $e');
     } finally {
       try { if (temp != null && await temp.exists()) await temp.delete(); } catch (_) {}
       client?.close(force: true);
+      activeDownloadClient = null;
       if (mounted) setState(() => busy = false);
     }
   }
@@ -253,7 +268,7 @@ class _StoreHomeState extends State<StoreHome> {
   void showDetails(StoreApp app) => showDialog<void>(context: context, builder: (context) => AlertDialog(
     title: Text(app.title), content: SizedBox(width: 420, child: SingleChildScrollView(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
-      children: [Text(app.description), const SizedBox(height: 16), Text('Categoria: ${app.category}'),
+      children: [Text(ResultPresentation.cleanDescription(app.description)), const SizedBox(height: 16), Text('Categoria: ${app.category}'),
         Text('Versao: ${app.version}'), Text('Desenvolvedor: ${app.developer}'),
         Text('Licenca declarada: ${app.license}'),
         Text('Tamanho: ${fileSize(app.sizeBytes)}'),
@@ -269,14 +284,20 @@ class _StoreHomeState extends State<StoreHome> {
   @override
   Widget build(BuildContext context) {
     final categories = ['Todos', ...{for (final a in apps) a.category}];
+    final formats = ['Todos', ...{for (final a in apps) ResultPresentation.format(a.downloadUrl, a.title)}];
+    final sources = ['Todas', ...{for (final a in apps) ResultPresentation.source(a.developer, a.projectUrl)}];
     final filtered = apps.where((a) => (category == 'Todos' || a.category == category) &&
+      (formatFilter == 'Todos' || ResultPresentation.format(a.downloadUrl, a.title) == formatFilter) &&
+      (sourceFilter == 'Todas' || ResultPresentation.source(a.developer, a.projectUrl) == sourceFilter) &&
       '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains(search.toLowerCase())).toList();
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Busca de arquivos ELF, ISO e compactados', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5), const Text('Aviso: arquivos e compatibilidade nao verificados.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)), Text('Fonte: $source  •  $status', maxLines: 3, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 5), const Text('Aviso: arquivos e compatibilidade nao verificados.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
+          if (searchingOnline || busy || status.startsWith('Falha') || status.startsWith('Download') || status.startsWith('Busca online') || status.contains('arquivos encontrados'))
+            Text(status, maxLines: 2, overflow: TextOverflow.ellipsis),
           if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             LinearProgressIndicator(value: progress > 0 ? progress : null),
             const SizedBox(height: 4), Text(
@@ -285,8 +306,11 @@ class _StoreHomeState extends State<StoreHome> {
               ' • ${(downloadSpeed / 1024).toStringAsFixed(0)} KB/s'
               '${totalDownloadBytes > 0 ? ' • ${(progress * 100).toStringAsFixed(0)}%' : ''}',
               style: const TextStyle(fontSize: 12)),
+            Align(alignment: Alignment.centerRight, child: TextButton.icon(
+              onPressed: cancelRequested ? null : cancelDownload,
+              icon: const Icon(Icons.cancel_outlined), label: const Text('Cancelar download'))),
           ])),
-          const SizedBox(height: 18), TextFormField(initialValue: 'OPL', onChanged: (v) => search = v,
+          const SizedBox(height: 18), TextFormField(onChanged: (v) => setState(() => search = v),
             decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Pesquisar OPL, ELF, ISO, ZIP, RAR...' , border: OutlineInputBorder())),
           const SizedBox(height: 10), Row(children: [
             FilledButton.icon(onPressed: busy || searchingOnline ? null : searchOnline,
@@ -303,7 +327,11 @@ class _StoreHomeState extends State<StoreHome> {
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(label: Text(c), selected: c == category, onSelected: (_) => setState(() => category = c)))
           ])),
-          const SizedBox(height: 12), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar na internet para encontrar arquivos publicos.')) :
+          const SizedBox(height: 10), Wrap(spacing: 12, runSpacing: 6, children: [
+            DropdownButton<String>(value: formatFilter, hint: const Text('Formato'), items: formats.map((f) => DropdownMenuItem(value: f, child: Text('Formato: $f'))).toList(), onChanged: (v) => setState(() => formatFilter = v ?? 'Todos')),
+            DropdownButton<String>(value: sourceFilter, hint: const Text('Origem'), items: sources.map((f) => DropdownMenuItem(value: f, child: Text('Origem: $f'))).toList(), onChanged: (v) => setState(() => sourceFilter = v ?? 'Todas')),
+          ]),
+          const SizedBox(height: 8), Expanded(child: filtered.isEmpty ? const Center(child: Text('Nenhum aplicativo listado. Use Buscar na internet para encontrar arquivos publicos.')) :
             LayoutBuilder(builder: (context, constraints) => GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 550 ? 2 : 1,
@@ -315,10 +343,10 @@ class _StoreHomeState extends State<StoreHome> {
                     Row(children: [const Icon(Icons.sports_esports, color: Colors.lightBlueAccent), const SizedBox(width: 10),
                       Expanded(child: Text(app.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)))]),
-                    const SizedBox(height: 8), Text(app.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4), Text('Autor: ${app.developer}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 8), Text(ResultPresentation.cleanDescription(app.description), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4), Text('Origem: ${ResultPresentation.source(app.developer, app.projectUrl)} • ${app.developer}', maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                    const Spacer(), Row(children: [Expanded(child: Text('${app.category} • v${app.version} • ${fileSize(app.sizeBytes)}',
+                    const Spacer(), Row(children: [Expanded(child: Text('${app.category} • ${ResultPresentation.format(app.downloadUrl, app.title)} • ${fileSize(app.sizeBytes)}',
                         overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
                       Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
                   ]))));
