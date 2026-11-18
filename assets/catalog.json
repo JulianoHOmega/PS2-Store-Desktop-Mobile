@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "store_name": "PS2 Store",
+  "updated_at": "2026-11-17T00:00:00Z",
+  "games": [
+    {"id":"demo-001","title":"Homebrew demonstrativo","description":"Exemplo de como um aplicativo aparece no catalogo. Nenhum download real esta configurado.","category":"Homebrew","version":"0.1","license":"Exemplo sem distribuicao","download_url":"","cover":""},
+    {"id":"demo-002","title":"Utilitario demonstrativo","description":"Entrada ilustrativa para testar busca, filtros e detalhes.","category":"Utilitarios","version":"0.1","license":"Exemplo sem distribuicao","download_url":"","cover":""}
+  ]
+}
