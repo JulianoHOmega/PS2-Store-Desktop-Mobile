@@ -29,7 +29,7 @@ class MultiSourceSearch {
     final results = <GitHubResult>[];
     try {
       // Independent providers: a failure in one must not discard the other.
-      await Future.wait([_github(client, query, results), _gitlab(client, query, results), _archive(client, query, results), _sourceForge(client, query, results)]);
+      await Future.wait([_github(client, query, results), _gitlab(client, query, results), _archive(client, query, results), _sourceForge(client, query, results), _codeberg(client, query, results)]);
       final seen = <String>{};
       results.sort((a, b) => b.relevanceScore.compareTo(a.relevanceScore));
       // One visible card per project; releases/assets from the same project do not flood the screen.
@@ -57,10 +57,10 @@ class MultiSourceSearch {
       final clean = query.replaceAll(RegExp(r'[^\w\s.-]'), ' ').trim();
       final data = await _json(client, Uri.https('archive.org', '/advancedsearch.php', {
         'q': '($clean) AND mediatype:(software)',
-        'fl[]': 'identifier', 'rows': '25', 'page': '1', 'output': 'json',
+        'fl[]': 'identifier', 'rows': '45', 'page': '1', 'output': 'json',
       })) as Map<String, dynamic>;
       final docs = ((data['response'] as Map?)?['docs'] as List?) ?? [];
-      for (final raw in docs.take(18)) {
+      for (final raw in docs.take(30)) {
         try {
           final id = (raw as Map)['identifier']?.toString() ?? '';
           if (!RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(id)) continue;
@@ -119,6 +119,45 @@ class MultiSourceSearch {
         } catch (_) { /* Feed unavailable. */ }
       }
     } catch (_) { /* Directory unavailable. */ }
+  }
+
+  /// Codeberg: public Forgejo repository search and release assets.
+  /// Projects without releases are ignored; each provider fails independently.
+  Future<void> _codeberg(HttpClient client, String query, List<GitHubResult> out) async {
+    try {
+      final data = await _json(client, Uri.https('codeberg.org', '/api/v1/repos/search', {
+        'q': query, 'limit': '25',
+      })) as Map<String, dynamic>;
+      final repos = (data['data'] as List?) ?? [];
+      for (final raw in repos.take(20)) {
+        if (raw is! Map) continue;
+        final fullName = raw['full_name']?.toString() ?? '';
+        if (!RegExp(r'^[\w.-]+/[\w.-]+$').hasMatch(fullName)) continue;
+        try {
+          final releases = await _json(client, Uri.https('codeberg.org', '/api/v1/repos/$fullName/releases', {'limit': '5'})) as List;
+          for (final release in releases) {
+            if (release is! Map) continue;
+            for (final asset in (release['assets'] as List?) ?? []) {
+              if (asset is! Map) continue;
+              final filename = asset['name']?.toString() ?? '';
+              final url = asset['browser_download_url']?.toString() ?? '';
+              if (!extensions.hasMatch(filename) || !_validUrl(url)) continue;
+              final description = raw['description']?.toString() ?? '';
+              out.add(GitHubResult(
+                id: 'codeberg/$fullName/$filename', title: '$fullName — $filename',
+                description: description, version: release['tag_name']?.toString() ?? 'Arquivo',
+                license: 'Nao verificada', downloadUrl: url,
+                projectUrl: raw['html_url']?.toString() ?? 'https://codeberg.org/$fullName',
+                sizeBytes: (asset['size'] as num?)?.toInt() ?? 0,
+                category: SearchQuality.category(fullName, description),
+                developer: 'Codeberg • $fullName',
+                relevanceScore: SearchQuality.score(fullName, description, filename, query),
+              ));
+            }
+          }
+        } catch (_) { /* Repositorio sem releases acessiveis. */ }
+      }
+    } catch (_) { /* A pesquisa nas outras fontes continua funcionando. */ }
   }
 
   Future<void> _github(HttpClient client, String query, List<GitHubResult> out) async {

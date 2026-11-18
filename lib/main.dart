@@ -149,7 +149,7 @@ class _StoreHomeState extends State<StoreHome> {
 
   Future<void> searchOnline() async {
     if (busy || searchingOnline) return;
-    setState(() { searchingOnline = true; status = 'Pesquisando GitHub, GitLab, Internet Archive e SourceForge...'; });
+    setState(() { searchingOnline = true; status = 'Pesquisando GitHub, GitLab, Internet Archive, SourceForge e Codeberg...'; });
     try {
       final results = await MultiSourceSearch().search(search);
       if (!mounted) return;
@@ -160,7 +160,7 @@ class _StoreHomeState extends State<StoreHome> {
           downloadUrl: r.downloadUrl, cover: '',
           projectUrl: r.projectUrl, sizeBytes: r.sizeBytes,
         )).toList();
-        source = 'GitHub + GitLab + Internet Archive + SourceForge';
+        source = 'GitHub + GitLab + Internet Archive + SourceForge + Codeberg';
         category = 'Todos'; formatFilter = 'Todos'; sourceFilter = 'Todas';
         status = '${results.length} arquivos encontrados; origem indicada; NAO verificados';
       });
@@ -292,10 +292,9 @@ class _StoreHomeState extends State<StoreHome> {
       '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains(search.toLowerCase())).toList();
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
-      body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
+      body: Container(decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/omega_background.jpeg'), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Color(0xB9000000), BlendMode.darken))), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
         child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Busca de arquivos ELF, ISO e compactados', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5), const Text('Aviso: arquivos e compatibilidade nao verificados.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
           if (searchingOnline || busy || status.startsWith('Falha') || status.startsWith('Download') || status.startsWith('Busca online') || status.contains('arquivos encontrados'))
             Text(status, maxLines: 2, overflow: TextOverflow.ellipsis),
           if (busy) Padding(padding: const EdgeInsets.only(top: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -351,6 +350,6 @@ class _StoreHomeState extends State<StoreHome> {
                       Icon(app.downloadUrl.isEmpty ? Icons.info_outline : Icons.download, size: 20)])
                   ]))));
               })))
-        ])))));
+        ]))))));
   }
 }

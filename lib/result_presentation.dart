@@ -19,6 +19,7 @@ class ResultPresentation {
     final text = '$developer $projectUrl'.toLowerCase();
     if (text.contains('archive.org') || text.contains('internet archive')) return 'Internet Archive';
     if (text.contains('sourceforge')) return 'SourceForge';
+    if (text.contains('codeberg')) return 'Codeberg';
     if (text.contains('gitlab')) return 'GitLab';
     if (text.contains('github')) return 'GitHub';
     return 'Outras';
