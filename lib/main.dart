@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'github_search.dart';
+import 'download_history.dart';
 
 const remoteCatalogUrl = String.fromEnvironment('CATALOG_URL', defaultValue: '');
 
@@ -50,7 +51,46 @@ class _StoreHomeState extends State<StoreHome> {
   bool searchingOnline = false;
   double progress = 0;
   String? lastSavedPath;
-  final List<String> completedDownloads = [];
+  List<DownloadRecord> completedDownloads = [];
+  final DownloadHistoryStore historyStore = DownloadHistoryStore();
+
+  Future<void> loadDownloadHistory() async {
+    try {
+      final records = await historyStore.load();
+      if (mounted) setState(() => completedDownloads = records);
+    } catch (e) {
+      if (mounted) setState(() => status = 'Historico indisponivel: $e');
+    }
+  }
+
+  Future<void> recordDownload(StoreApp app, String filename, String location) async {
+    final record = DownloadRecord(
+      title: app.title, filename: filename, location: location,
+      sourceUrl: app.downloadUrl, completedAt: DateTime.now().toUtc());
+    final updated = [record, ...completedDownloads].take(100).toList();
+    if (mounted) setState(() => completedDownloads = updated);
+    try {
+      await historyStore.save(updated);
+    } catch (e) {
+      if (mounted) setState(() => status = 'Download concluido; falha ao salvar historico: $e');
+    }
+  }
+
+  void showDownloadHistory() => showDialog<void>(context: context, builder: (context) => AlertDialog(
+    title: const Text('Historico de downloads'),
+    content: SizedBox(width: 550, height: 380, child: completedDownloads.isEmpty
+      ? const Center(child: Text('Nenhum download registrado.'))
+      : ListView.builder(itemCount: completedDownloads.length, itemBuilder: (context, index) {
+          final item = completedDownloads[index];
+          return ListTile(
+            leading: const Icon(Icons.download_done),
+            title: Text(item.filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${item.title}\n${item.completedAt.toLocal()}\n${item.location}',
+              maxLines: 3, overflow: TextOverflow.ellipsis),
+          );
+        })),
+    actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar'))],
+  ));
 
   String fileSize(int bytes) => bytes <= 0 ? 'Tamanho nao informado'
     : bytes >= 1048576 ? '${(bytes / 1048576).toStringAsFixed(1)} MB'
@@ -71,7 +111,7 @@ class _StoreHomeState extends State<StoreHome> {
     }
   }
   @override
-  void initState() { super.initState(); loadCatalog(); }
+  void initState() { super.initState(); loadCatalog(); loadDownloadHistory(); }
 
   Future<void> loadCatalog() async {
     setState(() => status = 'Carregando catalogo...');
@@ -138,7 +178,7 @@ class _StoreHomeState extends State<StoreHome> {
       client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
       final req = await client.getUrl(uri);
       final res = await req.close().timeout(const Duration(seconds: 30));
-      if (res.statusCode != HttpStatus.ok) throw HttpException('HTTP ${res.statusCode}');
+      if (res.statusCode != HttpStatus.ok) throw HttpException('Servidor retornou HTTP ${res.statusCode}');
       final filename = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
       final safeName = filename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       if (safeName.isEmpty || safeName == '.' || safeName == '..') throw const FormatException('Nome de arquivo invalido');
@@ -176,14 +216,14 @@ class _StoreHomeState extends State<StoreHome> {
         if (saved == null) {
           if (mounted) setState(() => status = 'Salvamento cancelado.');
         } else {
-          if (mounted) setState(() { lastSavedPath = null; completedDownloads.insert(0, safeName);
-            status = 'Arquivo salvo no local escolhido.'; });
+          if (mounted) setState(() { lastSavedPath = null; status = 'Arquivo salvo no local escolhido.'; });
+          await recordDownload(app, safeName, saved);
         }
       } else {
         await temp.rename(target.path);
         temp = null;
-        if (mounted) setState(() { lastSavedPath = target.path; completedDownloads.insert(0, safeName);
-          status = 'Download concluido: ${target.path}'; });
+        if (mounted) setState(() { lastSavedPath = target.path; status = 'Download concluido: ${target.path}'; });
+        await recordDownload(app, safeName, target.path);
       }
     } catch (e) {
       if (mounted) setState(() => status = 'Falha no download: $e');
@@ -235,9 +275,8 @@ class _StoreHomeState extends State<StoreHome> {
             const Spacer(),
             if (!Platform.isAndroid) TextButton.icon(onPressed: openDownloadsFolder,
               icon: const Icon(Icons.folder_open), label: const Text('Abrir Downloads')),
-            if (completedDownloads.isNotEmpty) Tooltip(
-              message: completedDownloads.take(5).join('\n'),
-              child: Chip(label: Text('${completedDownloads.length} download(s) nesta sessao'))),
+            TextButton.icon(onPressed: showDownloadHistory, icon: const Icon(Icons.history),
+              label: Text('Historico (${completedDownloads.length})')),
           ]),
           const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final c in categories) Padding(padding: const EdgeInsets.only(right: 8),

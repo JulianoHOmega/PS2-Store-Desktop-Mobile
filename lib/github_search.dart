@@ -79,7 +79,11 @@ class GitHubHomebrewSearch {
         }
       }
       results.sort((a, b) => b.relevanceScore.compareTo(a.relevanceScore));
-      return results;
+      final seen = <String>{};
+      return results.where((result) {
+        final key = result.projectUrl.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+        return seen.add(key.isEmpty ? result.downloadUrl.toLowerCase() : key);
+      }).toList();
     } finally {
       client.close(force: true);
     }

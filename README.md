@@ -43,3 +43,13 @@ No GitHub, envie todos os arquivos para a raiz e crie .github/workflows/build.ym
 - Downloads usam a implementacao da v0.4; no Android abre o seletor de destino.
 - O workflow `.github/workflows/build.yml` foi preservado integralmente.
 - Ainda nao compilado/testado em Flutter neste ambiente.
+
+
+## Atualizacao v0.8
+
+- Historico de downloads: botao **Historico** mostra os ultimos 100 downloads concluídos, inclusive apos reiniciar o aplicativo.
+- Registro em JSON na pasta de suporte do aplicativo (nao na pasta Downloads).
+- Downloads continuam salvos na pasta Downloads do Windows/Linux e pelo seletor no Android.
+- Busca remove resultados repetidos do mesmo repositorio.
+- Esta versao nao implementa retomada de downloads; se uma transferencia falhar, sera necessario recomecar.
+- Compilacao e testes reais devem ser feitos pelo GitHub Actions e no dispositivo.
