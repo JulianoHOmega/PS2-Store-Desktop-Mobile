@@ -1,0 +1,92 @@
+name: PS2 Store - Windows Linux Android
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows 10/11
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Gerar estrutura nativa Windows
+        run: flutter create --platforms=windows --project-name ps2_store .
+      - name: Remover teste de exemplo gerado pelo Flutter
+        shell: pwsh
+        run: |
+          if (Test-Path 'test/widget_test.dart') { Remove-Item 'test/widget_test.dart' -Force }
+      - name: Instalar dependencias
+        run: flutter pub get
+      - name: Analisar codigo
+        run: flutter analyze --no-fatal-infos
+      - name: Executar testes
+        run: flutter test
+      - name: Compilar Windows
+        run: flutter build windows --release
+      - name: Empacotar Windows
+        shell: pwsh
+        run: |
+          $release = 'build/windows/x64/runner/Release'
+          if (!(Test-Path $release)) { throw "Pasta Windows nao encontrada: $release" }
+          Compress-Archive -Path "$release/*" -DestinationPath 'PS2Store-Windows.zip' -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS2Store-Windows
+          path: PS2Store-Windows.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias Linux
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter create --platforms=linux --project-name ps2_store .
+      - name: Remover teste de exemplo gerado pelo Flutter
+        run: rm -f test/widget_test.dart
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - run: tar -czf PS2Store-Linux.tar.gz -C build/linux/x64/release/bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS2Store-Linux
+          path: PS2Store-Linux.tar.gz
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter create --platforms=android --project-name ps2_store .
+      - name: Remover teste de exemplo gerado pelo Flutter
+        run: rm -f test/widget_test.dart
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS2Store-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
