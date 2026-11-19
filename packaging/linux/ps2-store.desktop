@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PS2 Store
+Comment=Pesquisa de jogos para PS2
+Exec=ps2_store
+Icon=ps2-store
+Terminal=false
+Categories=Game;
+StartupWMClass=ps2_store
