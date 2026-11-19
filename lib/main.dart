@@ -1,3 +1,4 @@
+import 'busca_inteligente.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -162,7 +163,7 @@ class _StoreHomeState extends State<StoreHome> {
     activeSearchQuery = query;
     setState(() { searchingOnline = true; hasSearched = true; apps = []; visibleCount = 30; status = 'Pesquisando fontes publicas...'; });
     try {
-      final results = await MultiSourceSearch().search(query);
+      final results = await MultiSourceSearch().search(BuscaInteligente.corrigirConsulta(query));
       if (!mounted || activeSearchQuery != query) return;
       setState(() {
         apps = results.map((r) => StoreApp(
@@ -357,7 +358,10 @@ class _StoreHomeState extends State<StoreHome> {
     final filtered = apps.where((a) => (category == 'Todos' || a.category == category) &&
       (formatFilter == 'Todos' || ResultPresentation.format(a.downloadUrl, a.title) == formatFilter) &&
       (sourceFilter == 'Todas' || ResultPresentation.source(a.developer, a.projectUrl) == sourceFilter) &&
-      '${a.title} ${a.description} ${a.developer} ${a.category}'.toLowerCase().contains((activeSearchQuery ?? '').toLowerCase().trim())).toList();
+      (activeSearchQuery == null || BuscaInteligente.pontuacao(activeSearchQuery!, a.title) >= 0.65 ||
+       BuscaInteligente.normalizar('${a.title} ${a.description} ${a.developer} ${a.category}').contains(BuscaInteligente.normalizar(activeSearchQuery!)))).toList()
+      ..sort((a, b) => BuscaInteligente.pontuacao(activeSearchQuery ?? '', b.title)
+          .compareTo(BuscaInteligente.pontuacao(activeSearchQuery ?? '', a.title)));
     return Scaffold(appBar: AppBar(title: const Text('PS2 STORE by JulianoHOmega', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
       actions: [IconButton(tooltip: 'Voltar ao catalogo local', onPressed: busy || searchingOnline ? null : loadCatalog, icon: const Icon(Icons.refresh))]),
       body: Container(decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/omega_background.jpeg'), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Color(0xB9000000), BlendMode.darken))), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1150),
