@@ -1,11 +1,24 @@
-# PS2 Store Desktop & Mobile v0.9
+PS2 Store
+Versão 2.0 • Código aberto
 
-Versao baseada na v0.8 validada pelo usuario no Windows 10.
+Projeto para baixar arquivos e jogos de ps2
+Quando consegue acessar o link direto disponibiliza o botão de download, caso não ele mostra o link do site para baixar
+Funciona nas plataformas:
+Windows
+Linux
+Android
 
-**Alteracoes:** catalogo demonstrativo removido; progresso com velocidade media e bytes; atualizacao visual limitada.
 
-**Compilacao:** envie os arquivos para o mesmo repositorio GitHub, incluindo `.github/workflows/build.yml`. O workflow compila Windows, Linux e Android.
+Funcionalidades
+- Pesquisa de jogos pela internet.
+- Busca inteligente com tolerância a erros de digitação.
+- Interface multiplataforma.
+- Código-fonte aberto para contribuições da comunidade.
 
-**Teste:** pesquise no GitHub, baixe um arquivo de projeto confiavel, verifique a pasta Downloads, velocidade, tamanho e historico apos reiniciar.
-
-**Avisos:** a compatibilidade e a seguranca dos arquivos encontrados nao sao verificadas automaticamente. A v0.9 ainda nao oferece retomar downloads interrompidos.
+Downloads
+ Windows
+https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile-v3/releases/download/v2.0.0/PS2Store-Windows.2.zip
+ Linux
+https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile-v3/releases/download/v2.0.0/PS2Store-Linux.tar.gz
+ Android
+ https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile-v3/releases/download/v2.0.0/app-release.apk
