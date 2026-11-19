@@ -3,6 +3,8 @@ name: PS2 Store - Windows Linux Android
 on:
   push:
     branches: [main, master]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +22,10 @@ jobs:
           cache: true
       - name: Gerar estrutura nativa Windows
         run: flutter create --platforms=windows --project-name ps2_store .
+      - name: Aplicar icone Windows (EXE e barra de tarefas)
+        shell: pwsh
+        run: |
+          Copy-Item 'assets/icons/ps2_store_icon.ico' 'windows/runner/resources/app_icon.ico' -Force
       - name: Remover teste de exemplo gerado pelo Flutter
         shell: pwsh
         run: |
@@ -56,11 +62,21 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=linux --project-name ps2_store .
+      - name: Configurar icone da janela Linux
+        run: python3 scripts/configure_linux_icon.py
+
       - name: Remover teste de exemplo gerado pelo Flutter
         run: rm -f test/widget_test.dart
       - run: flutter pub get
       - run: flutter build linux --release
-      - run: tar -czf PS2Store-Linux.tar.gz -C build/linux/x64/release/bundle .
+      - name: Preparar pacote Linux com icone e atalho
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          cp assets/icons/ps2_store_icon.png "$BUNDLE/ps2-store.png"
+          cp packaging/linux/ps2-store.desktop "$BUNDLE/ps2-store.desktop"
+          cp packaging/linux/install.sh "$BUNDLE/install.sh"
+          chmod +x "$BUNDLE/install.sh"
+          tar -czf PS2Store-Linux.tar.gz -C "$BUNDLE" .
       - uses: actions/upload-artifact@v4
         with:
           name: PS2Store-Linux
@@ -81,6 +97,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=android --project-name ps2_store .
+      - name: Instalar Pillow para gerar icones Android
+        run: python3 -m pip install --user Pillow
+      - name: Aplicar icones Android (launcher e aplicativos instalados)
+        run: python3 scripts/configure_android_icon.py
       - name: Garantir permissao de internet no Android
         run: |
           python3 - <<'PYMANIFEST'
@@ -102,8 +122,41 @@ jobs:
         run: rm -f test/widget_test.dart
       - run: flutter pub get
       - run: flutter build apk --release
+      - name: Preparar APK com nome da versao
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk PS2Store-Android.apk
       - uses: actions/upload-artifact@v4
         with:
           name: PS2Store-Android-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: PS2Store-Android.apk
           if-no-files-found: error
+
+  release:
+    name: Publicar Release automaticamente
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux, android]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Baixar artefatos compilados
+        uses: actions/download-artifact@v4
+        with:
+          pattern: PS2Store-*
+          path: dist
+          merge-multiple: true
+      - name: Conferir arquivos antes da publicacao
+        run: |
+          ls -lh dist/
+          test -s dist/PS2Store-Windows.zip
+          test -s dist/PS2Store-Linux.tar.gz
+          test -s dist/PS2Store-Android.apk
+      - name: Publicar arquivos na Release da tag
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/PS2Store-Windows.zip
+            dist/PS2Store-Linux.tar.gz
+            dist/PS2Store-Android.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: true
