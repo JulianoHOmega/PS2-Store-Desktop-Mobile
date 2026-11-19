@@ -81,6 +81,23 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=android --project-name ps2_store .
+      - name: Garantir permissao de internet no Android
+        run: |
+          python3 - <<'PYMANIFEST'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          xml = path.read_text(encoding='utf-8')
+          permission = '<uses-permission android:name="android.permission.INTERNET" />'
+          if permission not in xml and 'android.permission.INTERNET' not in xml:
+              pos = xml.find('<application')
+              if pos < 0:
+                  raise SystemExit('AndroidManifest.xml sem tag application')
+              xml = xml[:pos] + '    ' + permission + '\n    ' + xml[pos:]
+              path.write_text(xml, encoding='utf-8')
+          print('Permissao INTERNET verificada:', path)
+          PYMANIFEST
+      - name: Verificar manifesto Android
+        run: grep -n 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
       - name: Remover teste de exemplo gerado pelo Flutter
         run: rm -f test/widget_test.dart
       - run: flutter pub get
