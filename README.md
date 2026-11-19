@@ -20,9 +20,9 @@ Acesse a **[Release v2.0.0](https://github.com/JulianoHOmega/PS2-Store-Desktop-M
 
 | Plataforma | Download |
 | --- | --- |
-| 🪟 Windows | [PS2Store-Windows.2.zip](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.0/PS2Store-Windows.2.zip) |
-| 🐧 Linux | [PS2Store-Linux.tar.gz](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.0/PS2Store-Linux.tar.gz) |
-| 📱 Android | [app-release.apk](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.0/app-release.apk) |
+| 🪟 Windows | [PS2Store-Windows.2.zip](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.1/PS2Store-Windows.zip) |
+| 🐧 Linux | [PS2Store-Linux.tar.gz](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.1/PS2Store-Linux.tar.gz) |
+| 📱 Android | [app-release.apk](https://github.com/JulianoHOmega/PS2-Store-Desktop-Mobile/releases/download/v2.0.1/PS2Store-Android.apk) |
 
 ## 🚀 Instalação
 
